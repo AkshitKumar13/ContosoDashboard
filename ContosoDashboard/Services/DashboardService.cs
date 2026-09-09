@@ -8,6 +8,7 @@ public interface IDashboardService
 {
     Task<DashboardSummary> GetDashboardSummaryAsync(int userId);
     Task<List<Announcement>> GetActiveAnnouncementsAsync();
+    Task<List<Document>> GetRecentDocumentsAsync(int userId, int count = 5);
 }
 
 public class DashboardService : IDashboardService
@@ -40,7 +41,15 @@ public class DashboardService : IDashboardService
                 .CountAsync(),
 
             UnreadNotifications = await _context.Notifications
-                .CountAsync(n => n.UserId == userId && !n.IsRead)
+                .CountAsync(n => n.UserId == userId && !n.IsRead),
+
+            DocumentCount = await _context.Documents.CountAsync(d => d.UploadedByUserId == userId),
+            RecentDocuments = await _context.Documents
+                .AsNoTracking()
+                .Where(d => d.UploadedByUserId == userId)
+                .OrderByDescending(d => d.UploadedDate)
+                .Take(5)
+                .ToListAsync()
         };
 
         return summary;
@@ -59,6 +68,16 @@ public class DashboardService : IDashboardService
             .Take(5)
             .ToListAsync();
     }
+
+    public Task<List<Document>> GetRecentDocumentsAsync(int userId, int count = 5)
+    {
+        return _context.Documents
+            .AsNoTracking()
+            .Where(d => d.UploadedByUserId == userId)
+            .OrderByDescending(d => d.UploadedDate)
+            .Take(Math.Clamp(count, 1, 20))
+            .ToListAsync();
+    }
 }
 
 public class DashboardSummary
@@ -67,4 +86,6 @@ public class DashboardSummary
     public int TasksDueToday { get; set; }
     public int ActiveProjects { get; set; }
     public int UnreadNotifications { get; set; }
+    public int DocumentCount { get; set; }
+    public List<Document> RecentDocuments { get; set; } = [];
 }

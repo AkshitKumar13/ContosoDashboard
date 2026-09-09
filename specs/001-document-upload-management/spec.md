@@ -5,6 +5,16 @@
 **Status**: Draft  
 **Input**: User description: `--file StakeholderDocs/document-upload-and-management-feature.md`
 
+## Clarifications
+
+### Session 2026-09-09
+
+- Q: When malware scanning cannot complete or reports an unsafe file, should the upload be rejected immediately or held unavailable for administrator review? -> A: Reject the upload immediately.
+- Q: When a user loses project membership, should their access to project documents be removed immediately even if they previously received a direct share? -> A: Remove project access immediately; direct shares remain until revoked.
+- Q: What should a “team” mean when sharing a document? -> A: An existing department or team membership in ContosoDashboard.
+- Q: How long should document activity audit records be retained? -> A: 12 months.
+- Q: If sharing succeeds but the in-app notification cannot be delivered, should the document remain shared? -> A: Keep sharing active and retry notification delivery.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Upload and Securely Store a Document (Priority: P1)
@@ -77,13 +87,14 @@ An employee sees recent personal document activity on the dashboard, while admin
 
 ### Edge Cases
 
-- A user loses project membership after uploading or receiving a document; access is recalculated before every protected operation.
+- A user loses project membership after uploading or receiving a document; project-based access is removed immediately, while an explicit direct share remains until revoked, and access is recalculated before every protected operation.
 - A project or user referenced by a document is removed or becomes unavailable; existing metadata remains understandable and access follows current authorization rules.
 - A file save succeeds but metadata persistence fails, or metadata persistence succeeds but file cleanup fails; the system reports the failure and does not present an incomplete document as successful.
 - A replacement upload fails validation or storage; the existing file remains available.
 - A user submits duplicate titles, empty optional fields, unsupported tags, or a filename containing path-control characters; input is normalized or rejected without exposing server paths.
 - A search includes unauthorized documents that match the query; those documents must not affect visible results or reveal their existence.
 - A preview is unavailable or the file type is not previewable; the user receives a clear fallback to download when authorized.
+- Sharing remains active when notification delivery fails; notification delivery is retried without rolling back the permission change.
 - Network interruption occurs during upload; the user receives a failure result and can retry without creating duplicate records.
 - An upload or scan takes longer than expected; the progress state remains accurate and the user can understand whether the operation is still active.
 
@@ -96,10 +107,10 @@ An employee sees recent personal document activity on the dashboard, while admin
 - **FR-003**: The system MUST require a document title and one category from Project Documents, Team Resources, Personal Files, Reports, Presentations, or Other.
 - **FR-004**: The system MUST allow optional descriptions, custom tags, and project associations.
 - **FR-005**: The system MUST record upload time, uploader identity, file size, and content type for every stored document.
-- **FR-006**: The system MUST complete a malware and virus scan before making an uploaded file available.
+- **FR-006**: The system MUST complete a malware and virus scan before making an uploaded file available and MUST reject the upload immediately when scanning cannot complete or reports an unsafe file.
 - **FR-007**: The system MUST store documents outside publicly accessible web content and MUST prevent user-provided filenames from determining storage paths.
 - **FR-008**: The system MUST generate a unique, portable document location before recording document metadata and MUST avoid presenting a document whose file and metadata are incomplete.
-- **FR-009**: The system MUST enforce authorization for document listing, searching, previewing, downloading, editing, replacing, deleting, and sharing.
+- **FR-009**: The system MUST enforce authorization for document listing, searching, previewing, downloading, editing, replacing, deleting, and sharing, removing project-based access immediately when membership ends while preserving an explicit direct share until revoked.
 - **FR-010**: Employees MUST be able to view their own uploaded documents; project team members MUST be able to view and download documents associated with their projects.
 - **FR-011**: Team leads MUST be able to manage documents uploaded by team members within their authorized scope, project managers MUST be able to manage documents for their projects, and administrators MUST have full document access.
 - **FR-012**: Document owners MUST be able to edit metadata, replace the file, and permanently delete their documents after confirmation.
@@ -107,10 +118,10 @@ An employee sees recent personal document activity on the dashboard, while admin
 - **FR-014**: Users MUST be able to sort document lists by title, upload date, category, and size and filter by category, project, and date range.
 - **FR-015**: Users MUST be able to search accessible documents by title, description, tags, uploader, and project, with results returned within 2 seconds for the supported data volume.
 - **FR-016**: Authorized users MUST be able to download documents and preview PDFs and images in the browser when preview is supported.
-- **FR-017**: Document owners MUST be able to share documents with specific users or teams; recipients MUST receive an in-app notification and see shared documents in Shared with Me.
+- **FR-017**: Document owners MUST be able to share documents with specific users or existing departments or teams; recipients MUST receive an in-app notification and see shared documents in Shared with Me. If notification delivery fails, the share MUST remain active and notification delivery MUST be retried.
 - **FR-018**: The dashboard MUST show the current user's five most recent uploads and document count.
 - **FR-019**: The system MUST notify relevant project members when a new project document is added.
-- **FR-020**: The system MUST record uploads, downloads, deletions, and share actions with enough detail for administrators to audit them.
+- **FR-020**: The system MUST record uploads, downloads, deletions, replacements, metadata changes, and share actions with enough detail for administrators to audit them and MUST retain those audit records for 12 months.
 - **FR-021**: Administrators MUST be able to generate reports of document types, active uploaders, and access patterns; other users MUST be denied access.
 - **FR-022**: The feature MUST work without cloud services in the training environment and MUST preserve a replaceable storage boundary for future hosted storage.
 - **FR-023**: The feature MUST use integer document identifiers and store category values as text to remain consistent with existing application data conventions.
@@ -119,7 +130,7 @@ An employee sees recent personal document activity on the dashboard, while admin
 ### Key Entities
 
 - **Document**: A work-related file and its metadata, including title, description, category, tags, content type, size, upload time, uploader, project, task association, and storage location.
-- **Document Share**: A permission relationship connecting a document to an individual user or team, including sharing actor and time.
+- **Document Share**: A permission relationship connecting a document to an individual user or existing department or team membership, including sharing actor and time.
 - **Document Activity**: An audit record for document uploads, downloads, deletions, replacements, metadata changes, and shares.
 - **Document Category**: A controlled text value used to organize documents.
 - **Project Document Association**: The relationship between a document and a project, optionally including a task context.
@@ -143,10 +154,11 @@ An employee sees recent personal document activity on the dashboard, while admin
 
 - The initial release is for web users of the existing ContosoDashboard and uses the repository's existing role and project membership concepts.
 - Local filesystem storage is available in the training environment; cloud storage is a future deployment option rather than a launch dependency.
-- A malware scanning capability is available to the deployed environment; when it is unavailable, the system rejects or holds uploads rather than treating them as safe.
+- A malware scanning capability is available to the deployed environment; when it is unavailable or cannot complete, the system rejects the upload rather than treating it as safe.
 - The existing mock authentication remains the identity source for training and is not a production security solution.
 - Documents are permanently deleted in this release; recovery, trash, quotas, version history, collaborative editing, external storage integrations, mobile apps, workflows, and document generation are out of scope.
 - The supported initial data volume is up to 500 documents in a user's list; larger-scale performance is a future capacity concern.
+- Document activity audit records are retained for 12 months.
 - The original stakeholder timeline of 8-10 weeks is a planning target, not a functional acceptance criterion.
 
 ## Constraints

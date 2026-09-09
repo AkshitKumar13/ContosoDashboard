@@ -5,6 +5,8 @@
 @using System.Security.Claims
 @attribute [Authorize]
 @inject ITaskService TaskService
+@inject IDocumentService DocumentService
+@inject NavigationManager NavigationManager
 @inject AuthenticationStateProvider AuthenticationStateProvider
 
 <PageTitle>My Tasks - ContosoDashboard</PageTitle>
@@ -123,9 +125,18 @@
                                 }
                             </td>
                             <td>
-                                <button class="btn btn-sm btn-outline-primary" @onclick="() => ViewTaskDetails(task.TaskId)">
+                                <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => ViewTaskDetails(task.TaskId)">
                                     <i class="bi bi-eye"></i>
                                 </button>
+                                @if (task.ProjectId.HasValue)
+                                {
+                                    <a class="btn btn-sm btn-outline-secondary" href="/documents?projectId=@task.ProjectId" title="Open project documents">
+                                        <i class="bi bi-file-earmark-text"></i>
+                                    </a>
+                                    <a class="btn btn-sm btn-outline-success" href="/documents?projectId=@task.ProjectId&taskId=@task.TaskId" title="Attach a document from this task">
+                                        <i class="bi bi-paperclip"></i>
+                                    </a>
+                                }
                             </td>
                         </tr>
                     }

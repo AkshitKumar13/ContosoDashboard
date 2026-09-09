@@ -1,0 +1,164 @@
+@page "/documents/{DocumentId:int}"
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@attribute [Authorize]
+@inject IDocumentService DocumentService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager NavigationManager
+
+<PageTitle>Document - ContosoDashboard</PageTitle>
+
+<div class="container-fluid">
+    @if (document is null)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else
+    {
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div><a href="/documents">Documents</a><h1>@document.Title</h1></div>
+            <div class="btn-group">
+                @if (DocumentValidation.IsPreviewable(document.ContentType))
+                {
+                    <a class="btn btn-outline-primary" href="/documents/download/@document.DocumentId?preview=true" target="_blank">Preview</a>
+                }
+                <a class="btn btn-primary" href="/documents/download/@document.DocumentId">Download</a>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(message)) { <div class="alert alert-info">@message</div> }
+        @if (!string.IsNullOrWhiteSpace(error)) { <div class="alert alert-danger">@error</div> }
+
+        <div class="row g-4">
+            <div class="col-lg-7">
+                <div class="card mb-4"><div class="card-header"><h5 class="mb-0">Metadata</h5></div><div class="card-body">
+                    <dl class="row">
+                        <dt class="col-sm-4">File</dt><dd class="col-sm-8">@document.OriginalFileName</dd>
+                        <dt class="col-sm-4">Size</dt><dd class="col-sm-8">@FormatSize(document.FileSize)</dd>
+                        <dt class="col-sm-4">Type</dt><dd class="col-sm-8">@document.ContentType</dd>
+                        <dt class="col-sm-4">Uploaded</dt><dd class="col-sm-8">@document.UploadedDate.ToLocalTime().ToString("f")</dd>
+                        <dt class="col-sm-4">Uploaded by</dt><dd class="col-sm-8">@document.UploadedByUser.DisplayName</dd>
+                        <dt class="col-sm-4">Project</dt><dd class="col-sm-8">@(document.Project?.Name ?? "Personal")</dd>
+                    </dl>
+                    @if (canManage)
+                    {
+                        <hr />
+                        <div class="mb-3"><label class="form-label">Title</label><input class="form-control" @bind="title" /></div>
+                        <div class="mb-3"><label class="form-label">Description</label><textarea class="form-control" @bind="description"></textarea></div>
+                        <div class="mb-3"><label class="form-label">Category</label><select class="form-select" @bind="category">@foreach (var value in DocumentValidation.Categories) { <option value="@value">@value</option> }</select></div>
+                        <div class="mb-3"><label class="form-label">Tags</label><input class="form-control" @bind="tags" /></div>
+                        <button class="btn btn-outline-primary me-2" @onclick="SaveMetadata">Save metadata</button>
+                        <button class="btn btn-outline-danger" @onclick="DeleteDocument">Delete permanently</button>
+                    }
+                </div></div>
+
+                @if (canManage)
+                {
+                    <div class="card"><div class="card-header"><h5 class="mb-0">Replace file</h5></div><div class="card-body">
+                        <InputFile OnChange="SelectReplacement" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.jpg,.jpeg,.png" />
+                        @if (replacement is not null) { <button class="btn btn-warning mt-3" @onclick="ReplaceFile">Replace with @replacement.Name</button> }
+                    </div></div>
+                }
+            </div>
+            <div class="col-lg-5">
+                @if (canManage)
+                {
+                    <div class="card"><div class="card-header"><h5 class="mb-0">Share document</h5></div><div class="card-body">
+                        <label class="form-label">Recipient user ID</label><input type="number" class="form-control mb-3" @bind="shareUserId" min="1" />
+                        <label class="form-label">Or existing department/team</label><input class="form-control mb-3" @bind="shareDepartment" maxlength="100" />
+                        <button class="btn btn-primary" @onclick="ShareDocument">Share</button>
+                    </div></div>
+
+                    @if (document.Shares.Count > 0)
+                    {
+                        <div class="card mt-4"><div class="card-header"><h5 class="mb-0">Active shares</h5></div><div class="list-group list-group-flush">
+                            @foreach (var share in document.Shares)
+                            {
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span>@(share.SharedWithUser?.DisplayName ?? share.SharedWithDepartment ?? "Recipient")</span>
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => RevokeShare(share.DocumentShareId)">Revoke</button>
+                                </div>
+                            }
+                        </div></div>
+                    }
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public int DocumentId { get; set; }
+    private int currentUserId;
+    private Document? document;
+    private bool canManage;
+    private string title = string.Empty;
+    private string? description;
+    private string category = string.Empty;
+    private string? tags;
+    private int? shareUserId;
+    private string? shareDepartment;
+    private IBrowserFile? replacement;
+    private string? message;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        int.TryParse(state.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out currentUserId);
+        await LoadDocument();
+    }
+
+    private async Task LoadDocument()
+    {
+        document = await DocumentService.GetByIdAsync(currentUserId, DocumentId);
+        if (document is null) { NavigationManager.NavigateTo("/documents"); return; }
+        title = document.Title;
+        description = document.Description;
+        category = document.Category;
+        tags = document.Tags;
+        canManage = document.UploadedByUserId == currentUserId;
+    }
+
+    private async Task SaveMetadata()
+    {
+        if (await DocumentService.UpdateMetadataAsync(currentUserId, DocumentId, title, description, category, tags)) { message = "Metadata updated."; await LoadDocument(); }
+        else error = "Metadata could not be updated.";
+    }
+
+    private void SelectReplacement(InputFileChangeEventArgs args) => replacement = args.File;
+
+    private async Task ReplaceFile()
+    {
+        if (replacement is null) return;
+        try
+        {
+            await using var stream = replacement.OpenReadStream(DocumentValidation.MaxFileSizeBytes);
+            if (await DocumentService.ReplaceFileAsync(currentUserId, DocumentId, stream, replacement.Name, replacement.ContentType, replacement.Size)) { message = "File replaced."; await LoadDocument(); }
+            else error = "The replacement was rejected or could not be stored.";
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task DeleteDocument()
+    {
+        if (await DocumentService.DeleteAsync(currentUserId, DocumentId)) NavigationManager.NavigateTo("/documents");
+        else error = "The document could not be deleted.";
+    }
+
+    private async Task ShareDocument()
+    {
+        if ((shareUserId is null) == string.IsNullOrWhiteSpace(shareDepartment)) { error = "Choose a user or department/team."; return; }
+        if (await DocumentService.ShareAsync(currentUserId, DocumentId, new DocumentShareTarget(shareUserId, shareDepartment))) { message = "Document shared. Notification delivery will retry if needed."; shareUserId = null; shareDepartment = null; }
+        else error = "The document could not be shared.";
+    }
+
+    private async Task RevokeShare(int shareId)
+    {
+        if (await DocumentService.RevokeShareAsync(currentUserId, shareId)) { message = "Share revoked."; await LoadDocument(); }
+        else error = "The share could not be revoked.";
+    }
+
+    private static string FormatSize(long size) => size >= 1024 * 1024 ? $"{size / 1024d / 1024d:0.0} MB" : $"{size / 1024d:0.0} KB";
+}
