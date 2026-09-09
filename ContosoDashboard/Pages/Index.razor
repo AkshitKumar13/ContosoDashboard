@@ -31,6 +31,14 @@
             <div class="col-md-3 mb-3">
                 <div class="card summary-card">
                     <div class="card-body">
+                        <h5 class="card-title">Documents</h5>
+                        <p class="card-text display-4 text-success">@summary.DocumentCount</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card summary-card">
+                    <div class="card-body">
                         <h5 class="card-title">Due Today</h5>
                         <p class="card-text display-4 text-warning">@summary.TasksDueToday</p>
                     </div>
@@ -50,6 +58,27 @@
                         <h5 class="card-title">Notifications</h5>
                         <p class="card-text display-4 text-danger">@summary.UnreadNotifications</p>
                     </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (summary?.RecentDocuments.Count > 0)
+    {
+        <div class="row mb-4">
+            <div class="col">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h3>Recent Documents</h3>
+                    <a class="btn btn-sm btn-outline-primary" href="/documents">View all</a>
+                </div>
+                <div class="list-group">
+                    @foreach (var document in summary.RecentDocuments)
+                    {
+                        <a class="list-group-item list-group-item-action" href="/documents/@document.DocumentId">
+                            <div class="d-flex justify-content-between"><strong>@document.Title</strong><small>@GetRelativeTime(document.UploadedDate)</small></div>
+                            <small class="text-muted">@document.Category - @document.OriginalFileName</small>
+                        </a>
+                    }
                 </div>
             </div>
         </div>

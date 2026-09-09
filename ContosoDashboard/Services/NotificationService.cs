@@ -8,6 +8,7 @@ public interface INotificationService
 {
     Task<List<Notification>> GetUserNotificationsAsync(int userId, bool unreadOnly = false);
     Task<Notification> CreateNotificationAsync(Notification notification);
+    Task<bool> CreateNotificationWithRetryAsync(Notification notification, CancellationToken cancellationToken = default);
     Task<bool> MarkAsReadAsync(int notificationId, int requestingUserId);
     Task<int> GetUnreadCountAsync(int userId);
 }
@@ -45,6 +46,24 @@ public class NotificationService : INotificationService
         await _context.SaveChangesAsync();
 
         return notification;
+    }
+
+    public async Task<bool> CreateNotificationWithRetryAsync(Notification notification, CancellationToken cancellationToken = default)
+    {
+        for (var attempt = 1; attempt <= 3; attempt++)
+        {
+            try
+            {
+                await CreateNotificationAsync(notification);
+                return true;
+            }
+            catch (Exception) when (attempt < 3)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(50 * attempt), cancellationToken);
+            }
+        }
+
+        return false;
     }
 
     public async Task<bool> MarkAsReadAsync(int notificationId, int requestingUserId)

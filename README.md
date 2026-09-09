@@ -161,6 +161,26 @@ public interface IFileStorageService
 
 The application automatically creates and seeds the database on first run with sample users, projects, tasks, and announcements.
 
+### Document Management (Training Feature)
+
+Documents are stored locally under `ContosoDashboard/AppData/uploads`, outside
+`wwwroot`, and are protected by service-level authorization before download or
+preview. The training implementation supports PDF, Office, text, JPEG, and PNG
+files up to 25 MB, with metadata stored in the LocalDB database. The local scanner
+recognizes the standard antivirus test signature and rejects unsafe or unverified
+uploads; it is not production malware protection.
+
+Run the focused document checks with:
+
+```powershell
+dotnet test .\ContosoDashboard.Tests\ContosoDashboard.Tests.csproj
+```
+
+Production deployments require a real malware-scanning service, identity provider,
+TLS, audit operations, and hosted storage implementation. The application keeps
+`IFileStorageService` and `IFileScanner` boundaries so those implementations can be
+replaced without changing document business workflows.
+
 ### Testing Security Features
 
 #### Test 1: Authentication Required
